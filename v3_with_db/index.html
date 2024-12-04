@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Manager</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .task {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        .task-header {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .progress-bar-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .progress-bar {
+            height: 20px;
+            background-color: #4caf50;
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+        .progress-bar-wrapper {
+            flex-grow: 1;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-right: 10px;
+        }
+        .add-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .add-button:hover {
+            background-color: #0056b3;
+        }
+        .subtask {
+            margin-left: 20px;
+        }
+        .add-subtask {
+            margin-top: 10px;
+            margin-left: 20px;
+        }
+        .details {
+            font-size: 0.9em;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>Task Manager</h1>
+
+    <div id="task-container"></div>
+    
+    <button class="add-button" onclick="addTask()">Add Task</button>
+
+    <script>
+        const apiBaseUrl = "http://localhost:5000";
+
+        async function fetchTasks() {
+            const response = await fetch(`${apiBaseUrl}/tasks`);
+            const tasks = await response.json();
+            return tasks;
+        }
+
+        async function addTask() {
+            const title = prompt("Enter task title:");
+            if (title) {
+                const response = await fetch(`${apiBaseUrl}/tasks`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ title, date_created: getCurrentDate() }),
+                });
+                if (response.ok) renderTasks();
+            }
+        }
+
+        async function addSubtask(taskId) {
+            const title = prompt("Enter subtask title:");
+            if (title) {
+                await fetch(`${apiBaseUrl}/subtasks`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ task_id: taskId, title, date_created: getCurrentDate() }),
+                });
+                renderTasks();
+            }
+        }
+
+        async function renderTasks() {
+            const tasks = await fetchTasks();
+            const container = document.getElementById("task-container");
+            container.innerHTML = "";
+            tasks.forEach(task => {
+                const taskDiv = document.createElement("div");
+                taskDiv.className = "task";
+                taskDiv.innerHTML = `
+                    <div class="task-header">
+                        <input type="checkbox" onchange="toggleTask(${task.id})" ${task.date_completed ? "checked" : ""}>
+                        <label>${task.title}</label>
+                    </div>
+                    <div class="details">
+                        UID: ${task.id} | Created: ${task.date_created} ${task.date_completed ? `| Completed: ${task.date_completed}` : ""}
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-wrapper">
+                            <div class="progress-bar" style="width: ${task.progress}%"></div>
+                        </div>
+                        <span>${task.progress}%</span>
+                    </div>
+                    <div class="subtasks">
+                        ${(task.subtasks || []).map(subtask => `
+                            <div class="subtask">
+                                <input type="checkbox" onchange="toggleSubtask(${task.id}, ${subtask.id})" ${subtask.done ? "checked" : ""}>
+                                <label>${subtask.title}</label>
+                                <div class="details">
+                                    UID: ${subtask.id} | Created: ${subtask.date_created} ${subtask.date_completed ? `| Completed: ${subtask.date_completed}` : ""}
+                                </div>
+                            </div>
+                        `).join("")}
+                    </div>
+                    <button class="add-button add-subtask" onclick="addSubtask(${task.id})">Add Subtask</button>
+                `;
+                container.appendChild(taskDiv);
+            });
+        }
+
+        async function toggleTask(taskId) {
+            await fetch(`${apiBaseUrl}/tasks/${taskId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ date_completed: new Date().toISOString() }),
+            });
+            renderTasks();
+        }
+
+        async function toggleSubtask(taskId, subtaskId) {
+            await fetch(`${apiBaseUrl}/subtasks/${subtaskId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ done: true, date_completed: new Date().toISOString() }),
+            });
+            renderTasks();
+        }
+
+        function getCurrentDate() {
+            const date = new Date();
+            return date.toISOString().split('T')[0]; // YYYY-MM-DD format
+        }
+
+        renderTasks();
+    </script>
+</body>
+</html>
